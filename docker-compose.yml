@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: sistema-rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"      # AMQP port
+      - "15672:15672"    # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - sistema-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  gerador-mensagens:
+    build: ./gerador-mensagens
+    container_name: sistema-gerador
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin123
+    volumes:
+      - ./images:/app/images
+    networks:
+      - sistema-network
+    restart: unless-stopped
+
+  ai-face-service:
+    build: ./ai-face-service
+    container_name: sistema-ai-face
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ai-face-service/models:/app/models
+    networks:
+      - sistema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  ai-team-service:
+    build: ./ai-team-service
+    container_name: sistema-ai-team
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./ai-team-service/models:/app/models
+    networks:
+      - sistema-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  consumidor-face:
+    build: ./consumidor-face
+    container_name: sistema-consumidor-face
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ai-face-service:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin123
+      QUEUE_NAME: face_queue
+      ROUTING_KEY: face
+      EMOTION_API_URL: http://ai-face-service:5000
+    volumes:
+      - ./images:/app/images
+    networks:
+      - sistema-network
+    restart: unless-stopped
+
+  consumidor-team:
+    build: ./consumidor-team
+    container_name: sistema-consumidor-team
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ai-team-service:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASS: admin123
+      QUEUE_NAME: team_queue
+      ROUTING_KEY: team
+      TEAM_API_URL: http://ai-team-service:5001
+    volumes:
+      - ./images:/app/images
+    networks:
+      - sistema-network
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  sistema-network:
+    driver: bridge
