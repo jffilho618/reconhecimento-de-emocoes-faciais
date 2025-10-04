@@ -686,7 +686,7 @@ Este projeto é para fins educacionais.
 
 <div align="center">
 
-**Desenvolvido com ❤️ para demonstração de sistemas distribuídos modernos**
+
 
 [⬆ Voltar ao topo](#-sistema-distribuído-de-análise-de-imagens-com-yolov5)
 
